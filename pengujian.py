@@ -116,43 +116,79 @@ def uji_overhead(he, messages, putaran=150):
 
 # ---------- 3. Ketahanan brute-force ----------
 
-def uji_bruteforce(he, messages, percobaan=250):
+def uji_bruteforce(he, messages, percobaan=250, tampil=25):
     print("\n=== UJI 3: KETAHANAN TERHADAP BRUTE-FORCE ===\n")
 
-    asli = messages[len(messages) // 2]
-    pw_benar = "kunciAsli!2024"
+    asli      = messages[len(messages) // 2]
+    pw_benar  = "kunciAsli!2024"
+    valid_set = set(messages)
 
-    blob_he = he.encrypt(pw_benar, asli)
+    blob_he  = he.encrypt(pw_benar, asli)
     blob_aes = honey.aes_encrypt(pw_benar, asli)
 
-    # serang Honey Encryption
-    he_bocor = 0
-    for _ in range(percobaan):
-        hasil = he.decrypt(pw_acak(), blob_he)
-        if hasil not in he.dte.index:    # output gak wajar = penyerang bisa tau
+    # buat daftar tebakan: semua salah kecuali satu di posisi acak
+    posisi_benar = random.randint(tampil, percobaan - tampil)
+    tebakan = [pw_acak() for _ in range(percobaan)]
+    tebakan[posisi_benar] = pw_benar
+
+    # jalankan semua tebakan, simpan hasilnya
+    semua     = []
+    aes_bocor = 0
+    he_bocor  = 0
+    for pw in tebakan:
+        aes_hasil = honey.aes_coba(pw, blob_aes)
+        he_hasil  = he.decrypt(pw, blob_he)
+
+        if aes_hasil not in valid_set:
+            aes_bocor += 1
+        if he_hasil not in he.dte.index:
             he_bocor += 1
 
-    # serang AES biasa: kunci salah biasanya bikin padding rusak / byte ngaco
-    aes_bocor = 0
-    for _ in range(percobaan):
-        try:
-            honey.aes_decrypt(pw_acak(), blob_aes)
-            # kalau lolos pun, hampir pasti bukan pesan yang masuk akal
-            aes_bocor += 0
-        except Exception:
-            aes_bocor += 1               # error = sinyal "kunci ini salah"
+        semua.append({
+            "pw":    pw,
+            "aes":   aes_hasil,
+            "he":    he_hasil,
+            "benar": pw == pw_benar,
+        })
 
+    # pilih 25 baris untuk ditampilkan: tersebar + baris benar selalu masuk
+    langkah = max(1, percobaan // (tampil - 1))
+    indeks  = sorted(set(list(range(0, percobaan, langkah))[:tampil - 1] + [posisi_benar]))[:tampil]
+    sampel  = [semua[i] for i in indeks]
+
+    # --- cetak header ---
     print(f"Pesan asli yang dilindungi : {asli}")
-    print(f"Jumlah tebakan password    : {percobaan}\n")
-    print(f"{'Skema':<22}{'Tebakan ketahuan salah':>26}{'Bocor':>9}")
-    garis(57)
-    print(f"{'AES-128 biasa':<22}{aes_bocor:>26}{100*aes_bocor/percobaan:>8.0f}%")
-    print(f"{'Honey Encryption':<22}{he_bocor:>26}{100*he_bocor/percobaan:>8.0f}%")
-    garis(57)
+    print(f"Jumlah tebakan password    : {percobaan}")
+    print(f"Kunci benar ada di tebakan : ke-{posisi_benar + 1}\n")
+
+    # --- cetak tabel 25 baris ---
+    W1, W2, W3 = 16, 26, 22
+    SEP  = "-" * (W1 + W2 + W3 + 6)
+    HDR  = f"{'Password dicoba':<{W1}}  {'AES-128 (hasil)':<{W2}}  {'Honey Enc. (hasil)':<{W3}}"
+    print(HDR)
+    print(SEP)
+    for r in sampel:
+        pw_col  = r["pw"][:W1]
+        aes_col = r["aes"][:W2]
+        he_col  = (r["he"] or "?")[:W3]
+        baris   = f"{pw_col:<{W1}}  {aes_col:<{W2}}  {he_col:<{W3}}"
+        if r["benar"]:
+            print(baris + "  <- KUNCI BENAR")
+        else:
+            print(baris)
+    print(SEP)
+
+    # --- cetak ringkasan statistik ---
+    print(f"\nRingkasan dari {percobaan} tebakan penuh:")
+    print(f"{'Skema':<22}{'Ketahuan salah':<20}{'Bocor':>8}")
+    garis(50)
+    print(f"{'AES-128 biasa':<22}{aes_bocor:<20}{100*aes_bocor/percobaan:>7.0f}%")
+    print(f"{'Honey Encryption':<22}{he_bocor:<20}{100*he_bocor/percobaan:>7.0f}%")
+    garis(50)
     print()
-    print("Interpretasi: pada AES biasa, kunci salah langsung ketahuan (error/garbage)")
-    print("sehingga penyerang tahu kapan tebakannya benar. Pada Honey Encryption setiap")
-    print("tebakan menghasilkan pesan wajar, jadi sinyal keberhasilan itu hilang.")
+    print("Interpretasi: AES biasa langsung ketahuan salah karena hasilnya byte ngaco.")
+    print("Honey Encryption selalu keluar pesan wajar, jadi penyerang gak punya sinyal")
+    print("buat tau kapan dia berhasil — itulah perlindungan utama Honey Encryption.")
 
     return {"aes_bocor": aes_bocor, "he_bocor": he_bocor, "percobaan": percobaan}
 

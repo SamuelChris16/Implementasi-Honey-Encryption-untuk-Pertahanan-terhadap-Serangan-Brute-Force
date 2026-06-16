@@ -74,3 +74,19 @@ def aes_decrypt(password, blob):
     if pad < 1 or pad > 16:
         raise ValueError("padding rusak")      # kunci salah ketauan di sini
     return data[:-pad].decode("utf-8")         # ini juga bisa gagal kalau byte ngaco
+
+def aes_coba(password, blob):
+    # versi aes_decrypt yang gak lempar exception —
+    # kalau kunci salah dan hasilnya byte ngaco, balikin hex pendek
+    # biar bisa ditampilin langsung di tabel perbandingan
+    salt, iv, ct = blob[:16], blob[16:32], blob[32:]
+    key = turunkan_kunci(password, salt)
+    dec = Cipher(algorithms.AES(key), modes.CBC(iv)).decryptor()
+    raw = dec.update(ct) + dec.finalize()
+    pad = raw[-1]
+    if pad < 1 or pad > 16:
+        return "\\x" + raw[:6].hex() + "…"    # padding rusak = jelas gibberish
+    try:
+        return raw[:-pad].decode("utf-8")
+    except UnicodeDecodeError:
+        return "\\x" + raw[:6].hex() + "…"    # byte ngaco = juga gibberish
