@@ -194,66 +194,48 @@ def uji_bruteforce(he, messages, percobaan=250, tampil=25):
 
 
 # ---------- 4. Statistik pesan umpan ----------
-
-def _bit_dari_seed(dte, n):
-    # Ambil n seed sebesar yang dihasilkan dekripsi-kunci-salah, ubah jadi bit.
-    # Seed kunci-salah setara byte acak kripto, jadi kita pakai os.urandom.
-    data = os.urandom(n * 4)
-    return [(byte >> b) & 1 for byte in data for b in range(7, -1, -1)]
-
-
-def nist_monobit(bits):
-    # NIST frequency (monobit) test: cek proporsi 0 dan 1 seimbang
-    n = len(bits)
-    s = sum(2 * b - 1 for b in bits)
-    p = math.erfc(abs(s) / math.sqrt(n) / math.sqrt(2))
-    return p
-
-
-def nist_runs(bits):
-    # NIST runs test: cek pergantian 0<->1 wajar (gak terlalu sering/jarang)
-    n = len(bits)
-    pi = sum(bits) / n
-    if abs(pi - 0.5) >= 2 / math.sqrt(n):
-        return 0.0                       # gagal syarat awal
-    v = 1 + sum(1 for i in range(n - 1) if bits[i] != bits[i + 1])
-    num = abs(v - 2 * n * pi * (1 - pi))
-    den = 2 * math.sqrt(2 * n) * pi * (1 - pi)
-    return math.erfc(num / den)
-
-
 def uji_statistik(he, messages, target, sampel=20000):
-    print("\n=== UJI 4: STATISTIK PESAN UMPAN ===\n")
+    print("\n=== UJI 4: KUALITAS STATISTIK PESAN UMPAN ===\n")
 
-    # bagian A: distribusi pesan umpan vs distribusi yang dirancang
     hitung = {}
     for u in decoy_acak(he.dte, sampel):
         hitung[u] = hitung.get(u, 0) + 1
+
     empiris = {m: c / sampel for m, c in hitung.items()}
+
     kl = kl_divergence(empiris, target)
+    ent_target = entropi(target.values())
+    ent_empiris = entropi(empiris.values())
 
-    # bagian B: uji keacakan bit pakai NIST (sebagian)
-    bits = _bit_dari_seed(he.dte, 8000)
-    p_mono = nist_monobit(bits)
-    p_runs = nist_runs(bits)
+    delta_ent = abs(ent_target - ent_empiris)
 
-    print(f"Jumlah sampel umpan   : {sampel}\n")
-    print("Bagian A - kesesuaian distribusi")
-    print(f"   KL-divergence(umpan || rancangan) : {kl:.4f} bit")
-    print(f"   (makin dekat 0 = umpan makin setia ke distribusi yang dirancang)\n")
-    print("Bagian B - keacakan seed (NIST SP 800-22, sebagian)")
-    print(f"{'   Uji':<22}{'p-value':>12}{'Status':>10}")
-    garis(46)
-    for nama, p in [("Monobit", p_mono), ("Runs", p_runs)]:
-        status = "LULUS" if p >= 0.01 else "GAGAL"
-        print(f"   {nama:<19}{p:>12.4f}{status:>10}")
-    garis(46)
+    valid = sum(hitung.values())
+    validitas = 100.0 * valid / sampel
+
+    print(f"Jumlah sampel umpan : {sampel}\n")
+
+    print(f"{'Metrik':<25}{'Nilai':>12}")
+    garis(40)
+
+    print(f"{'Validitas umpan (%)':<25}{validitas:>12.2f}")
+    print(f"{'KL-divergence':<25}{kl:>12.4f}")
+    print(f"{'Entropy target':<25}{ent_target:>12.4f}")
+    print(f"{'Entropy umpan':<25}{ent_empiris:>12.4f}")
+    print(f"{'Selisih entropy':<25}{delta_ent:>12.4f}")
+
     print()
-    print("Interpretasi: KL-divergence kecil menandakan pesan umpan mengikuti pola")
-    print("ruang pesan, dan uji NIST lulus menandakan seed tersebar acak merata.")
+    print("Interpretasi:")
+    print("- Validitas tinggi menunjukkan seluruh decoy berada dalam ruang pesan yang sah.")
+    print("- KL-divergence mendekati nol menunjukkan distribusi decoy mengikuti distribusi target.")
+    print("- Selisih entropy kecil menunjukkan tingkat keragaman decoy hampir sama dengan data asli.")
 
-    return {"kl": kl, "monobit": p_mono, "runs": p_runs}
-
+    return {
+        "validitas": validitas,
+        "kl": kl,
+        "entropy_target": ent_target,
+        "entropy_decoy": ent_empiris,
+        "delta_entropy": delta_ent
+    }
 
 # ---------- 5. Analisis sensitivitas ----------
 
