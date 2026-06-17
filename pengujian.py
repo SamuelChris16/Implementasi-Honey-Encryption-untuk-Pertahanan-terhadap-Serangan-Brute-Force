@@ -196,45 +196,40 @@ def uji_bruteforce(he, messages, percobaan=250, tampil=25):
 # ---------- 4. Statistik pesan umpan ----------
 def uji_statistik(he, messages, target, sampel=20000):
     print("\n=== UJI 4: KUALITAS STATISTIK PESAN UMPAN ===\n")
-
     hitung = {}
+
     for u in decoy_acak(he.dte, sampel):
         hitung[u] = hitung.get(u, 0) + 1
 
     empiris = {m: c / sampel for m, c in hitung.items()}
 
     kl = kl_divergence(empiris, target)
-    ent_target = entropi(target.values())
-    ent_empiris = entropi(empiris.values())
 
-    delta_ent = abs(ent_target - ent_empiris)
+    entropy = entropi(empiris.values())
 
-    valid = sum(hitung.values())
-    validitas = 100.0 * valid / sampel
+    top1 = max(empiris.values()) * 100
 
     print(f"Jumlah sampel umpan : {sampel}\n")
 
     print(f"{'Metrik':<25}{'Nilai':>12}")
     garis(40)
 
-    print(f"{'Validitas umpan (%)':<25}{validitas:>12.2f}")
     print(f"{'KL-divergence':<25}{kl:>12.4f}")
-    print(f"{'Entropy target':<25}{ent_target:>12.4f}")
-    print(f"{'Entropy umpan':<25}{ent_empiris:>12.4f}")
-    print(f"{'Selisih entropy':<25}{delta_ent:>12.4f}")
+    print(f"{'Entropy (bit)':<25}{entropy:>12.4f}")
+    print(f"{'Top-1 dominance (%)':<25}{top1:>12.2f}")
+
+    garis(40)
 
     print()
     print("Interpretasi:")
-    print("- Validitas tinggi menunjukkan seluruh decoy berada dalam ruang pesan yang sah.")
-    print("- KL-divergence mendekati nol menunjukkan distribusi decoy mengikuti distribusi target.")
-    print("- Selisih entropy kecil menunjukkan tingkat keragaman decoy hampir sama dengan data asli.")
+    print("- KL mendekati nol menunjukkan distribusi umpan sesuai target.")
+    print("- Entropy tinggi menunjukkan keragaman umpan yang besar.")
+    print("- Top-1 dominance menunjukkan seberapa dominan satu pesan tertentu.")
 
     return {
-        "validitas": validitas,
         "kl": kl,
-        "entropy_target": ent_target,
-        "entropy_decoy": ent_empiris,
-        "delta_entropy": delta_ent
+        "entropy": entropy,
+        "top1": top1
     }
 
 # ---------- 5. Analisis sensitivitas ----------
