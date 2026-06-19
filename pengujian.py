@@ -195,7 +195,8 @@ def uji_bruteforce(he, messages, percobaan=250, tampil=25):
 
 # ---------- 4. Statistik pesan umpan ----------
 def uji_statistik(he, messages, target, sampel=20000):
-    print("\n=== UJI 4: KUALITAS STATISTIK PESAN UMPAN ===\n")
+    print("\n=== UJI 4: VERIFIKASI DISTRIBUSI DECOY ===\n")
+
     hitung = {}
 
     for u in decoy_acak(he.dte, sampel):
@@ -205,67 +206,86 @@ def uji_statistik(he, messages, target, sampel=20000):
 
     kl = kl_divergence(empiris, target)
 
-    entropy = entropi(empiris.values())
-
-    top1 = max(empiris.values()) * 100
-
     print(f"Jumlah sampel umpan : {sampel}\n")
 
     print(f"{'Metrik':<25}{'Nilai':>12}")
     garis(40)
 
     print(f"{'KL-divergence':<25}{kl:>12.4f}")
-    print(f"{'Entropy (bit)':<25}{entropy:>12.4f}")
-    print(f"{'Top-1 dominance (%)':<25}{top1:>12.2f}")
 
     garis(40)
 
     print()
     print("Interpretasi:")
-    print("- KL mendekati nol menunjukkan distribusi umpan sesuai target.")
-    print("- Entropy tinggi menunjukkan keragaman umpan yang besar.")
-    print("- Top-1 dominance menunjukkan seberapa dominan satu pesan tertentu.")
+    print("- Nilai yang mendekati nol menunjukkan distribusi umpan")
+    print("  berhasil mengikuti distribusi target yang dibangun DTE.")
 
-    return {
-        "kl": kl,
-        "entropy": entropy,
-        "top1": top1
-    }
+    return {"kl": kl}
 
 # ---------- 5. Analisis sensitivitas ----------
 
 def analisis_sensitivitas(messages, sampel=20000):
     print("\n=== UJI 5: ANALISIS SENSITIVITAS DISTRIBUSI ===\n")
+
     from util import buat_bobot
 
-    n = len(messages)
     hasil = []
+    n = len(messages)
 
     for dist in ["uniform", "zipf", "miring"]:
+
         bobot = buat_bobot(n, dist)
+
         target = dict(zip(messages, normalisasi(bobot)))
+
         dte = DTE(messages, bobot)
 
         hitung = {}
+
         for u in decoy_acak(dte, sampel):
             hitung[u] = hitung.get(u, 0) + 1
+
         empiris = {m: c / sampel for m, c in hitung.items()}
 
-        ent = entropi(list(empiris.values()))
-        ent_maks = math.log2(n)
-        top = max(empiris.values()) * 100
-        kl = kl_divergence(empiris, target)
-        hasil.append((dist, ent, ent_maks, top, kl))
+        entropy = entropi(empiris.values())
 
-    print(f"Jumlah pesan: {n}   |   entropi maksimum: {math.log2(n):.2f} bit\n")
-    print(f"{'Distribusi':<12}{'Entropi umpan':>16}{'Pesan teratas':>16}{'KL-div':>10}")
-    garis(54)
-    for dist, ent, ent_maks, top, kl in hasil:
-        print(f"{dist:<12}{ent:>10.2f} bit {'':>1}{top:>13.1f}% {kl:>9.4f}")
-    garis(54)
+        top = sorted(empiris.values(), reverse=True)
+
+        top1 = top[0] * 100
+
+        top5 = sum(top[:5]) * 100
+
+        hasil.append((dist, entropy, top1, top5))
+
+    ent_maks = math.log2(n)
+
+    print(f"Jumlah pesan : {n}")
+    print(f"Entropi maksimum : {ent_maks:.2f} bit\n")
+
+    print(
+        f"{'Distribusi':<12}"
+        f"{'Entropi':>12}"
+        f"{'Top-1 (%)':>14}"
+        f"{'Top-5 (%)':>14}"
+    )
+
+    garis(52)
+
+    for dist, entropy, top1, top5 in hasil:
+        print(
+            f"{dist:<12}"
+            f"{entropy:>12.2f}"
+            f"{top1:>14.1f}"
+            f"{top5:>14.1f}"
+        )
+
+    garis(52)
+
     print()
-    print("Interpretasi: makin miring distribusi, entropi umpan makin turun dan satu")
-    print("pesan makin mendominasi keluaran. Artinya perlindungan melemah pada ruang")
-    print("pesan yang tidak seragam - persis keterbatasan yang disebut di abstrak.")
+    print("Interpretasi:")
+    print("- Entropi tinggi berarti umpan lebih beragam.")
+    print("- Top-1 menunjukkan dominasi pesan paling sering muncul.")
+    print("- Top-5 menunjukkan seberapa besar keluaran terkonsentrasi")
+    print("  pada beberapa pesan teratas.")
 
     return hasil
